@@ -73,21 +73,17 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 18px;
   overflow: hidden;
 }
 
 .caption {
   display: grid;
-  gap: 8px;
-  opacity: 0.34;
-  transform: scale(0.94);
-  transition: opacity 180ms ease, transform 180ms ease;
+  gap: 10px;
+  opacity: 1;
 }
 
 .caption.active {
   opacity: 1;
-  transform: scale(1);
 }
 
 .caption-source,
@@ -99,17 +95,25 @@ button {
 .caption-source {
   min-height: 1.5em;
   color: var(--soft);
-  font-size: clamp(1.28rem, 5.2vw, 2rem);
-  line-height: 1.2;
+  font-size: clamp(1rem, 4.2vw, 1.45rem);
+  line-height: 1.22;
   font-weight: 520;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .caption-translation {
   color: var(--text);
-  font-size: clamp(2.15rem, 10vw, 4.2rem);
-  line-height: 1.06;
+  font-size: clamp(1.85rem, 8.1vw, 3.15rem);
+  line-height: 1.08;
   font-weight: 760;
   letter-spacing: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .control-strip {
