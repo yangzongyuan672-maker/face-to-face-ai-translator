@@ -3,12 +3,9 @@ const clearButton = document.querySelector("#clearButton");
 const historyButton = document.querySelector("#historyButton");
 const closeHistoryButton = document.querySelector("#closeHistoryButton");
 const historySheet = document.querySelector("#historySheet");
-const selfLanguage = document.querySelector("#selfLanguage");
-const peerLanguage = document.querySelector("#peerLanguage");
-const selfSourceText = document.querySelector("#selfSourceText");
-const selfTranslationText = document.querySelector("#selfTranslationText");
-const peerSourceText = document.querySelector("#peerSourceText");
-const peerTranslationText = document.querySelector("#peerTranslationText");
+const statusText = document.querySelector("#statusText");
+const selfCaptions = document.querySelector("#selfCaptions");
+const peerCaptions = document.querySelector("#peerCaptions");
 const historyList = document.querySelector("#historyList");
 const historyCount = document.querySelector("#historyCount");
 const historyItemTemplate = document.querySelector("#historyItemTemplate");
@@ -28,10 +25,12 @@ const state = {
   silenceMs: 950,
   minSpeechMs: 480,
   threshold: 0.035,
-  history: JSON.parse(localStorage.getItem("translatorHistory") || "[]")
+  history: JSON.parse(localStorage.getItem("translatorHistory") || "[]"),
+  captions: []
 };
 
 renderHistory();
+restoreCaptions();
 
 startButton.addEventListener("click", () => {
   if (state.listening) {
@@ -60,12 +59,7 @@ historySheet.addEventListener("click", (event) => {
 async function startListening() {
   try {
     setListeningUi(true);
-    updateDisplay({
-      selfSource: "正在请求麦克风...",
-      selfTranslation: "请允许麦克风",
-      peerSource: "Requesting microphone...",
-      peerTranslation: "Please allow"
-    });
+    setStatus("请求麦克风");
 
     state.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -82,24 +76,15 @@ async function startListening() {
     source.connect(state.analyser);
 
     state.listening = true;
-    updateDisplay({
-      selfSource: "请说话...",
-      selfTranslation: "正在听",
-      peerSource: "Listening...",
-      peerTranslation: "Listening..."
-    });
+    setStatus("正在听");
     monitorAudio();
   } catch (error) {
     console.error(error);
     setListeningUi(false);
-    updateDisplay({
-      selfSource: "麦克风不可用",
-      selfTranslation: "请在浏览器允许麦克风",
-      peerSource: "Microphone blocked",
-      peerTranslation: "Allow microphone"
-    });
-    selfTranslationText.classList.add("error");
-    peerTranslationText.classList.add("error");
+    setStatus("麦克风不可用");
+    if (!state.captions.length) {
+      renderCaptions([{ originalText: "麦克风不可用", translatedText: "请允许浏览器使用麦克风" }]);
+    }
   }
 }
 
@@ -113,12 +98,7 @@ function pauseListening() {
   state.audioContext = null;
   state.analyser = null;
   setListeningUi(false);
-  updateDisplay({
-    selfSource: "已暂停",
-    selfTranslation: "请说话...",
-    peerSource: "Paused",
-    peerTranslation: "Listening..."
-  });
+  setStatus("已暂停");
 }
 
 function monitorAudio() {
@@ -151,12 +131,7 @@ function startRecording() {
   state.recording = true;
   state.speechStartedAt = performance.now();
   state.lastVoiceAt = performance.now();
-  updateDisplay({
-    selfSource: "正在听...",
-    selfTranslation: "请继续说",
-    peerSource: "Listening...",
-    peerTranslation: "Keep speaking"
-  });
+  setStatus("收音中");
 
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
@@ -182,12 +157,7 @@ function stopRecording(shouldSubmit = false) {
 async function submitAudio() {
   if (!state.chunks.length || !state.listening) return;
   state.busy = true;
-  updateDisplay({
-    selfSource: "正在识别...",
-    selfTranslation: "正在翻译",
-    peerSource: "Transcribing...",
-    peerTranslation: "Translating"
-  });
+  setStatus("翻译中");
 
   const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || "audio/webm" });
   state.chunks = [];
@@ -202,55 +172,36 @@ async function submitAudio() {
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || "Translation failed");
     if (result.empty) {
-      updateDisplay({
-        selfSource: "",
-        selfTranslation: "请说话...",
-        peerSource: "Listening...",
-        peerTranslation: "Listening..."
-      });
+      setStatus("正在听");
       return;
     }
     renderResult(result);
     addHistory(result);
+    setStatus("正在听");
   } catch (error) {
     console.error(error);
-    updateDisplay({
-      selfSource: "翻译失败",
-      selfTranslation: "请再说一次",
-      peerSource: "Translation failed",
-      peerTranslation: "Try again"
-    });
-    selfTranslationText.classList.add("error");
-    peerTranslationText.classList.add("error");
+    setStatus("翻译失败");
   } finally {
     state.busy = false;
   }
 }
 
 function renderResult(result) {
-  const sourceIsChinese = result.sourceLanguage === "zh";
-  selfLanguage.textContent = sourceIsChinese ? "中文（简体）" : "English";
-  peerLanguage.textContent = sourceIsChinese ? "English" : "中文（简体）";
-  updateDisplay({
-    selfSource: result.originalText,
-    selfTranslation: result.translatedText,
-    peerSource: result.originalText,
-    peerTranslation: result.translatedText
+  state.captions.push({
+    originalText: result.originalText,
+    translatedText: result.translatedText
   });
-}
-
-function updateDisplay({ selfSource, selfTranslation, peerSource, peerTranslation }) {
-  selfSourceText.textContent = selfSource;
-  selfTranslationText.textContent = selfTranslation;
-  peerSourceText.textContent = peerSource;
-  peerTranslationText.textContent = peerTranslation;
-  selfTranslationText.classList.remove("error");
-  peerTranslationText.classList.remove("error");
+  state.captions = state.captions.slice(-3);
+  renderCaptions(state.captions);
 }
 
 function setListeningUi(isListening) {
   startButton.classList.toggle("listening", isListening);
   startButton.setAttribute("aria-label", isListening ? "暂停翻译" : "开始翻译");
+}
+
+function setStatus(text) {
+  statusText.textContent = text;
 }
 
 function addHistory(result) {
@@ -274,6 +225,43 @@ function renderHistory() {
     node.querySelector(".history-translation").textContent = item.translatedText;
     historyList.appendChild(node);
   });
+}
+
+function restoreCaptions() {
+  state.captions = state.history
+    .slice(0, 3)
+    .reverse()
+    .map((item) => ({
+      originalText: item.originalText,
+      translatedText: item.translatedText
+    }));
+  if (state.captions.length) renderCaptions(state.captions);
+}
+
+function renderCaptions(items) {
+  selfCaptions.innerHTML = "";
+  peerCaptions.innerHTML = "";
+  items.forEach((item, index) => {
+    const active = index === items.length - 1;
+    selfCaptions.appendChild(createCaption(item.originalText, item.translatedText, active));
+    peerCaptions.appendChild(createCaption(item.originalText, item.translatedText, active));
+  });
+}
+
+function createCaption(source, translation, active) {
+  const article = document.createElement("article");
+  article.className = `caption${active ? " active" : ""}`;
+
+  const sourceNode = document.createElement("p");
+  sourceNode.className = "caption-source";
+  sourceNode.textContent = source;
+
+  const translationNode = document.createElement("p");
+  translationNode.className = "caption-translation";
+  translationNode.textContent = translation;
+
+  article.append(sourceNode, translationNode);
+  return article;
 }
 
 function closeHistory() {
