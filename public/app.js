@@ -84,9 +84,9 @@ async function startListening() {
     state.listening = true;
     updateDisplay({
       selfSource: "请说话...",
-      selfTranslation: "正在聆听",
+      selfTranslation: "正在听",
       peerSource: "Listening...",
-      peerTranslation: "Speak now"
+      peerTranslation: "Listening..."
     });
     monitorAudio();
   } catch (error) {
@@ -115,9 +115,9 @@ function pauseListening() {
   setListeningUi(false);
   updateDisplay({
     selfSource: "已暂停",
-    selfTranslation: "点击开始",
+    selfTranslation: "请说话...",
     peerSource: "Paused",
-    peerTranslation: "Tap start"
+    peerTranslation: "Listening..."
   });
 }
 
@@ -203,10 +203,10 @@ async function submitAudio() {
     if (!response.ok || !result.ok) throw new Error(result.error || "Translation failed");
     if (result.empty) {
       updateDisplay({
-        selfSource: "请说话...",
-        selfTranslation: "正在聆听",
+        selfSource: "",
+        selfTranslation: "请说话...",
         peerSource: "Listening...",
-        peerTranslation: "Speak now"
+        peerTranslation: "Listening..."
       });
       return;
     }
