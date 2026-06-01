@@ -36,7 +36,7 @@ button {
   height: 100svh;
   margin: 0 auto;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 76px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 82px minmax(0, 1fr);
   background: var(--bg);
 }
 
@@ -57,9 +57,9 @@ button {
 
 .content {
   width: 100%;
-  display: grid;
-  justify-items: center;
-  gap: 18px;
+  height: 100%;
+  display: flex;
+  align-items: center;
   text-align: center;
 }
 
@@ -67,21 +67,36 @@ button {
   transform: rotate(180deg);
 }
 
-.language {
-  margin: 0;
-  color: var(--blue);
-  font-size: 1rem;
-  font-weight: 650;
+.caption-stack {
+  width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 18px;
+  overflow: hidden;
 }
 
-.source,
-.translation {
-  width: 100%;
+.caption {
+  display: grid;
+  gap: 8px;
+  opacity: 0.34;
+  transform: scale(0.94);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.caption.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.caption-source,
+.caption-translation {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.source {
+.caption-source {
   min-height: 1.5em;
   color: var(--soft);
   font-size: clamp(1.28rem, 5.2vw, 2rem);
@@ -89,7 +104,7 @@ button {
   font-weight: 520;
 }
 
-.translation {
+.caption-translation {
   color: var(--text);
   font-size: clamp(2.15rem, 10vw, 4.2rem);
   line-height: 1.06;
@@ -110,7 +125,7 @@ button {
 
 .listen-button {
   width: 82px;
-  height: 64px;
+  height: 58px;
   justify-self: center;
   display: inline-flex;
   align-items: center;
@@ -120,6 +135,21 @@ button {
   background: var(--blue);
   color: #0b1934;
   box-shadow: 0 14px 38px rgba(168, 198, 255, 0.18);
+}
+
+.control-center {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.control-center p {
+  min-height: 14px;
+  margin: 0;
+  color: rgba(244, 244, 241, 0.5);
+  font-size: 0.72rem;
+  line-height: 1;
+  font-weight: 650;
 }
 
 .listen-button.listening {
@@ -260,7 +290,7 @@ button {
 
 @media (max-height: 680px) {
   .translator {
-    grid-template-rows: minmax(0, 1fr) 64px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 68px minmax(0, 1fr);
   }
 
   .pane {
@@ -268,11 +298,11 @@ button {
   }
 
   .content {
-    gap: 12px;
+    align-items: center;
   }
 
   .listen-button {
     width: 72px;
-    height: 54px;
+    height: 50px;
   }
 }
