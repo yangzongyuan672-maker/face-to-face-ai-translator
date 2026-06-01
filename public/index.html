@@ -13,8 +13,8 @@
       <section class="pane pane-peer" aria-label="对方查看">
         <div class="content rotated">
           <p class="language" id="peerLanguage">English</p>
-          <p class="source" id="peerSourceText">Listening...</p>
-          <p class="translation" id="peerTranslationText">Tap start</p>
+          <p class="source" id="peerSourceText"></p>
+          <p class="translation" id="peerTranslationText">Listening...</p>
         </div>
       </section>
 
@@ -24,14 +24,14 @@
           <span class="dot"></span>
           <span class="dot"></span>
         </button>
-        <button class="ghost-button" id="clearButton" type="button" aria-label="清空记录">清空</button>
+        <span aria-hidden="true"></span>
       </section>
 
       <section class="pane pane-self" aria-label="自己查看">
         <div class="content">
           <p class="language" id="selfLanguage">中文（简体）</p>
-          <p class="source" id="selfSourceText">请说话...</p>
-          <p class="translation" id="selfTranslationText">点击中间按钮开始</p>
+          <p class="source" id="selfSourceText"></p>
+          <p class="translation" id="selfTranslationText">请说话...</p>
         </div>
       </section>
     </main>
@@ -40,6 +40,7 @@
       <div class="history-panel">
         <header>
           <p>历史记录 <span id="historyCount">0 / 20</span></p>
+          <button id="clearButton" type="button">清空</button>
           <button id="closeHistoryButton" type="button" aria-label="关闭历史记录">×</button>
         </header>
         <div class="history-list" id="historyList"></div>
