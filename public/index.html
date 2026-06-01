@@ -3,69 +3,48 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#090b0c">
+    <meta name="theme-color" content="#090909">
     <title>Face-to-Face AI Translator</title>
     <meta name="description" content="手机浏览器使用的中英面对面双向实时翻译器。">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <section class="panel panel-self" aria-label="自己查看">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Face-to-Face</p>
-            <h1>AI Translator</h1>
-          </div>
-          <div class="status-pill" id="statusPill">
-            <span class="pulse" aria-hidden="true"></span>
-            <span id="statusText">已暂停</span>
-          </div>
-        </header>
-
-        <div class="translation-card">
-          <p class="label" id="sourceLabel">原文</p>
-          <p class="live-text" id="liveText">点击开始后，把手机放在两人中间。</p>
-          <div class="divider"></div>
-          <p class="label" id="targetLabel">译文</p>
-          <p class="translated-text" id="translatedText">说中文会自动翻成英文；说英文会自动翻成中文。</p>
-        </div>
-
-        <section class="history-wrap">
-          <div class="history-head">
-            <span>最近记录</span>
-            <span id="historyCount">0 / 20</span>
-          </div>
-          <div class="history-list" id="historyList"></div>
-        </section>
-      </section>
-
-      <section class="center-strip" aria-label="控制区">
-        <div class="meter" id="meter" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div class="controls">
-          <button class="primary" id="startButton" type="button">开始翻译</button>
-          <button id="pauseButton" type="button" disabled>暂停</button>
-          <button id="clearButton" type="button">清空记录</button>
+    <main class="translator" aria-label="面对面翻译器">
+      <section class="pane pane-peer" aria-label="对方查看">
+        <div class="content rotated">
+          <p class="language" id="peerLanguage">English</p>
+          <p class="source" id="peerSourceText">Listening...</p>
+          <p class="translation" id="peerTranslationText">Tap start</p>
         </div>
       </section>
 
-      <section class="panel panel-guest" aria-label="对方查看">
-        <div class="guest-rotated">
-          <div class="translation-card guest-card">
-            <p class="label" id="guestSourceLabel">Original</p>
-            <p class="live-text" id="guestLiveText">Ready</p>
-            <div class="divider"></div>
-            <p class="label" id="guestTargetLabel">Translation</p>
-            <p class="translated-text" id="guestTranslatedText">Tap start and speak naturally.</p>
-          </div>
+      <section class="control-strip" aria-label="控制区">
+        <button class="history-button" id="historyButton" type="button" aria-label="历史记录">历史</button>
+        <button class="listen-button" id="startButton" type="button" aria-label="开始翻译">
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </button>
+        <button class="ghost-button" id="clearButton" type="button" aria-label="清空记录">清空</button>
+      </section>
+
+      <section class="pane pane-self" aria-label="自己查看">
+        <div class="content">
+          <p class="language" id="selfLanguage">中文（简体）</p>
+          <p class="source" id="selfSourceText">请说话...</p>
+          <p class="translation" id="selfTranslationText">点击中间按钮开始</p>
         </div>
       </section>
     </main>
+
+    <aside class="history-sheet" id="historySheet" aria-hidden="true">
+      <div class="history-panel">
+        <header>
+          <p>历史记录 <span id="historyCount">0 / 20</span></p>
+          <button id="closeHistoryButton" type="button" aria-label="关闭历史记录">×</button>
+        </header>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </aside>
 
     <template id="historyItemTemplate">
       <article class="history-item">
