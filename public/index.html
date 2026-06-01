@@ -12,26 +12,35 @@
     <main class="translator" aria-label="面对面翻译器">
       <section class="pane pane-peer" aria-label="对方查看">
         <div class="content rotated">
-          <p class="language" id="peerLanguage">English</p>
-          <p class="source" id="peerSourceText"></p>
-          <p class="translation" id="peerTranslationText">Listening...</p>
+          <div class="caption-stack" id="peerCaptions">
+            <article class="caption active">
+              <p class="caption-source"></p>
+              <p class="caption-translation">Listening...</p>
+            </article>
+          </div>
         </div>
       </section>
 
       <section class="control-strip" aria-label="控制区">
         <button class="history-button" id="historyButton" type="button" aria-label="历史记录">历史</button>
-        <button class="listen-button" id="startButton" type="button" aria-label="开始翻译">
-          <span class="dot"></span>
-          <span class="dot"></span>
-        </button>
+        <div class="control-center">
+          <button class="listen-button" id="startButton" type="button" aria-label="开始翻译">
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </button>
+          <p id="statusText">点击开始</p>
+        </div>
         <span aria-hidden="true"></span>
       </section>
 
       <section class="pane pane-self" aria-label="自己查看">
         <div class="content">
-          <p class="language" id="selfLanguage">中文（简体）</p>
-          <p class="source" id="selfSourceText"></p>
-          <p class="translation" id="selfTranslationText">请说话...</p>
+          <div class="caption-stack" id="selfCaptions">
+            <article class="caption active">
+              <p class="caption-source"></p>
+              <p class="caption-translation">请说话...</p>
+            </article>
+          </div>
         </div>
       </section>
     </main>
