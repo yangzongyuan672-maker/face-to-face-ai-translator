@@ -187,11 +187,10 @@ async function submitAudio() {
 }
 
 function renderResult(result) {
-  state.captions.push({
+  state.captions = [{
     originalText: result.originalText,
     translatedText: result.translatedText
-  });
-  state.captions = state.captions.slice(-3);
+  }];
   renderCaptions(state.captions);
 }
 
@@ -229,7 +228,7 @@ function renderHistory() {
 
 function restoreCaptions() {
   state.captions = state.history
-    .slice(0, 3)
+    .slice(0, 1)
     .reverse()
     .map((item) => ({
       originalText: item.originalText,
