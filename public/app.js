@@ -1,20 +1,17 @@
 const startButton = document.querySelector("#startButton");
-const pauseButton = document.querySelector("#pauseButton");
 const clearButton = document.querySelector("#clearButton");
-const statusPill = document.querySelector("#statusPill");
-const statusText = document.querySelector("#statusText");
-const liveText = document.querySelector("#liveText");
-const translatedText = document.querySelector("#translatedText");
-const sourceLabel = document.querySelector("#sourceLabel");
-const targetLabel = document.querySelector("#targetLabel");
-const guestLiveText = document.querySelector("#guestLiveText");
-const guestTranslatedText = document.querySelector("#guestTranslatedText");
-const guestSourceLabel = document.querySelector("#guestSourceLabel");
-const guestTargetLabel = document.querySelector("#guestTargetLabel");
+const historyButton = document.querySelector("#historyButton");
+const closeHistoryButton = document.querySelector("#closeHistoryButton");
+const historySheet = document.querySelector("#historySheet");
+const selfLanguage = document.querySelector("#selfLanguage");
+const peerLanguage = document.querySelector("#peerLanguage");
+const selfSourceText = document.querySelector("#selfSourceText");
+const selfTranslationText = document.querySelector("#selfTranslationText");
+const peerSourceText = document.querySelector("#peerSourceText");
+const peerTranslationText = document.querySelector("#peerTranslationText");
 const historyList = document.querySelector("#historyList");
 const historyCount = document.querySelector("#historyCount");
 const historyItemTemplate = document.querySelector("#historyItemTemplate");
-const meter = document.querySelector("#meter");
 
 const state = {
   listening: false,
@@ -36,17 +33,40 @@ const state = {
 
 renderHistory();
 
-startButton.addEventListener("click", startListening);
-pauseButton.addEventListener("click", pauseListening);
+startButton.addEventListener("click", () => {
+  if (state.listening) {
+    pauseListening();
+  } else {
+    startListening();
+  }
+});
+
 clearButton.addEventListener("click", () => {
   state.history = [];
   localStorage.removeItem("translatorHistory");
   renderHistory();
 });
 
+historyButton.addEventListener("click", () => {
+  historySheet.classList.add("open");
+  historySheet.setAttribute("aria-hidden", "false");
+});
+
+closeHistoryButton.addEventListener("click", closeHistory);
+historySheet.addEventListener("click", (event) => {
+  if (event.target === historySheet) closeHistory();
+});
+
 async function startListening() {
   try {
-    setStatus("正在请求麦克风", "listening");
+    setListeningUi(true);
+    updateDisplay({
+      selfSource: "正在请求麦克风...",
+      selfTranslation: "请允许麦克风",
+      peerSource: "Requesting microphone...",
+      peerTranslation: "Please allow"
+    });
+
     state.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -62,15 +82,24 @@ async function startListening() {
     source.connect(state.analyser);
 
     state.listening = true;
-    startButton.disabled = true;
-    pauseButton.disabled = false;
-    setStatus("正在监听", "listening");
-    updateLive("正在监听，说中文或英文都可以。", "Waiting for speech...");
+    updateDisplay({
+      selfSource: "请说话...",
+      selfTranslation: "正在聆听",
+      peerSource: "Listening...",
+      peerTranslation: "Speak now"
+    });
     monitorAudio();
   } catch (error) {
     console.error(error);
-    setStatus("麦克风不可用", "error");
-    updateLive("请允许浏览器使用麦克风。", "Please allow microphone access.");
+    setListeningUi(false);
+    updateDisplay({
+      selfSource: "麦克风不可用",
+      selfTranslation: "请在浏览器允许麦克风",
+      peerSource: "Microphone blocked",
+      peerTranslation: "Allow microphone"
+    });
+    selfTranslationText.classList.add("error");
+    peerTranslationText.classList.add("error");
   }
 }
 
@@ -83,10 +112,13 @@ function pauseListening() {
   state.stream = null;
   state.audioContext = null;
   state.analyser = null;
-  startButton.disabled = false;
-  pauseButton.disabled = true;
-  meter.classList.remove("active");
-  setStatus("已暂停");
+  setListeningUi(false);
+  updateDisplay({
+    selfSource: "已暂停",
+    selfTranslation: "点击开始",
+    peerSource: "Paused",
+    peerTranslation: "Tap start"
+  });
 }
 
 function monitorAudio() {
@@ -94,7 +126,6 @@ function monitorAudio() {
   const data = new Uint8Array(state.analyser.fftSize);
   state.analyser.getByteTimeDomainData(data);
   const level = rms(data);
-  updateMeter(level);
 
   const now = performance.now();
   if (level > state.threshold) {
@@ -120,8 +151,12 @@ function startRecording() {
   state.recording = true;
   state.speechStartedAt = performance.now();
   state.lastVoiceAt = performance.now();
-  setStatus("正在收音", "listening");
-  updateLive("正在聆听这一句话…", "Listening...");
+  updateDisplay({
+    selfSource: "正在听...",
+    selfTranslation: "请继续说",
+    peerSource: "Listening...",
+    peerTranslation: "Keep speaking"
+  });
 
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
@@ -147,8 +182,12 @@ function stopRecording(shouldSubmit = false) {
 async function submitAudio() {
   if (!state.chunks.length || !state.listening) return;
   state.busy = true;
-  setStatus("正在翻译", "listening");
-  updateLive("正在识别并翻译…", "Translating...");
+  updateDisplay({
+    selfSource: "正在识别...",
+    selfTranslation: "正在翻译",
+    peerSource: "Transcribing...",
+    peerTranslation: "Translating"
+  });
 
   const blob = new Blob(state.chunks, { type: state.chunks[0]?.type || "audio/webm" });
   state.chunks = [];
@@ -163,41 +202,62 @@ async function submitAudio() {
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || "Translation failed");
     if (result.empty) {
-      setStatus("正在监听", "listening");
+      updateDisplay({
+        selfSource: "请说话...",
+        selfTranslation: "正在聆听",
+        peerSource: "Listening...",
+        peerTranslation: "Speak now"
+      });
       return;
     }
     renderResult(result);
     addHistory(result);
-    setStatus("正在监听", "listening");
   } catch (error) {
     console.error(error);
-    setStatus("翻译失败", "error");
-    updateLive("翻译失败，请再说一次。", "Translation failed. Please try again.");
+    updateDisplay({
+      selfSource: "翻译失败",
+      selfTranslation: "请再说一次",
+      peerSource: "Translation failed",
+      peerTranslation: "Try again"
+    });
+    selfTranslationText.classList.add("error");
+    peerTranslationText.classList.add("error");
   } finally {
     state.busy = false;
   }
 }
 
 function renderResult(result) {
-  const sourceName = result.sourceLanguage === "zh" ? "中文" : "English";
-  const targetName = result.targetLanguage === "zh" ? "中文" : "English";
-  sourceLabel.textContent = `原文 · ${sourceName}`;
-  targetLabel.textContent = `译文 · ${targetName}`;
-  guestSourceLabel.textContent = `Original · ${sourceName}`;
-  guestTargetLabel.textContent = `Translation · ${targetName}`;
-  liveText.textContent = result.originalText;
-  translatedText.textContent = result.translatedText;
-  guestLiveText.textContent = result.originalText;
-  guestTranslatedText.textContent = result.translatedText;
+  const sourceIsChinese = result.sourceLanguage === "zh";
+  selfLanguage.textContent = sourceIsChinese ? "中文（简体）" : "English";
+  peerLanguage.textContent = sourceIsChinese ? "English" : "中文（简体）";
+  updateDisplay({
+    selfSource: result.originalText,
+    selfTranslation: result.translatedText,
+    peerSource: result.originalText,
+    peerTranslation: result.translatedText
+  });
+}
+
+function updateDisplay({ selfSource, selfTranslation, peerSource, peerTranslation }) {
+  selfSourceText.textContent = selfSource;
+  selfTranslationText.textContent = selfTranslation;
+  peerSourceText.textContent = peerSource;
+  peerTranslationText.textContent = peerTranslation;
+  selfTranslationText.classList.remove("error");
+  peerTranslationText.classList.remove("error");
+}
+
+function setListeningUi(isListening) {
+  startButton.classList.toggle("listening", isListening);
+  startButton.setAttribute("aria-label", isListening ? "暂停翻译" : "开始翻译");
 }
 
 function addHistory(result) {
   state.history.unshift({
     time: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
     originalText: result.originalText,
-    translatedText: result.translatedText,
-    sourceLanguage: result.sourceLanguage,
-    targetLanguage: result.targetLanguage
+    translatedText: result.translatedText
   });
   state.history = state.history.slice(0, 20);
   localStorage.setItem("translatorHistory", JSON.stringify(state.history));
@@ -216,25 +276,9 @@ function renderHistory() {
   });
 }
 
-function updateLive(selfText, guestText) {
-  liveText.textContent = selfText;
-  guestLiveText.textContent = guestText || selfText;
-}
-
-function setStatus(text, mode = "") {
-  statusText.textContent = text;
-  statusPill.className = `status-pill ${mode}`;
-}
-
-function updateMeter(level) {
-  const bars = meter.querySelectorAll("span");
-  const active = level > state.threshold;
-  meter.classList.toggle("active", active);
-  bars.forEach((bar, index) => {
-    const offset = Math.abs(index - 2) * 0.12;
-    const value = Math.min(2.8, Math.max(0.35, level * 28 - offset));
-    bar.style.setProperty("--level", value.toFixed(2));
-  });
+function closeHistory() {
+  historySheet.classList.remove("open");
+  historySheet.setAttribute("aria-hidden", "true");
 }
 
 function rms(data) {
