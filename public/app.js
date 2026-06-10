@@ -1,36 +1,46 @@
 const startButton = document.querySelector("#startButton");
+const endButton = document.querySelector("#endButton");
 const clearButton = document.querySelector("#clearButton");
+const exportButton = document.querySelector("#exportButton");
 const historyButton = document.querySelector("#historyButton");
 const closeHistoryButton = document.querySelector("#closeHistoryButton");
 const historySheet = document.querySelector("#historySheet");
 const statusText = document.querySelector("#statusText");
-const selfCaptions = document.querySelector("#selfCaptions");
-const peerCaptions = document.querySelector("#peerCaptions");
+const displayText = document.querySelector("#displayText");
+const stageLabel = document.querySelector("#stageLabel");
+const listeningIndicator = document.querySelector("#listeningIndicator");
 const historyList = document.querySelector("#historyList");
 const historyCount = document.querySelector("#historyCount");
 const historyItemTemplate = document.querySelector("#historyItemTemplate");
+
+const idleEndMs = 12 * 60 * 1000;
 
 const state = {
   listening: false,
   recording: false,
   busy: false,
+  ended: false,
   stream: null,
   audioContext: null,
   analyser: null,
   recorder: null,
   chunks: [],
   rafId: null,
+  idleTimer: null,
   lastVoiceAt: 0,
   speechStartedAt: 0,
   silenceMs: 950,
   minSpeechMs: 480,
   threshold: 0.035,
-  history: JSON.parse(localStorage.getItem("translatorHistory") || "[]"),
-  captions: []
+  sessionId: crypto.randomUUID?.() || String(Date.now()),
+  sessionStartedAt: new Date().toISOString(),
+  sessionEndedAt: null,
+  records: JSON.parse(localStorage.getItem("translatorSessionRecords") || "[]"),
+  lastDisplayText: localStorage.getItem("translatorLastDisplay") || ""
 };
 
 renderHistory();
-restoreCaptions();
+restoreDisplay();
 
 startButton.addEventListener("click", () => {
   if (state.listening) {
@@ -40,10 +50,20 @@ startButton.addEventListener("click", () => {
   }
 });
 
+endButton.addEventListener("click", () => {
+  endConversation("manual");
+});
+
 clearButton.addEventListener("click", () => {
-  state.history = [];
-  localStorage.removeItem("translatorHistory");
+  state.records = [];
+  state.sessionStartedAt = new Date().toISOString();
+  state.sessionEndedAt = null;
+  localStorage.removeItem("translatorSessionRecords");
   renderHistory();
+});
+
+exportButton.addEventListener("click", () => {
+  exportSessionDocument();
 });
 
 historyButton.addEventListener("click", () => {
@@ -58,6 +78,7 @@ historySheet.addEventListener("click", (event) => {
 
 async function startListening() {
   try {
+    state.ended = false;
     setListeningUi(true);
     setStatus("请求麦克风");
 
@@ -76,15 +97,15 @@ async function startListening() {
     source.connect(state.analyser);
 
     state.listening = true;
+    state.lastVoiceAt = performance.now();
+    resetIdleTimer();
     setStatus("正在听");
     monitorAudio();
   } catch (error) {
     console.error(error);
     setListeningUi(false);
     setStatus("麦克风不可用");
-    if (!state.captions.length) {
-      renderCaptions([{ originalText: "麦克风不可用", translatedText: "请允许浏览器使用麦克风" }]);
-    }
+    showPlaceholder("请允许浏览器使用麦克风");
   }
 }
 
@@ -92,6 +113,7 @@ function pauseListening() {
   state.listening = false;
   stopRecording();
   cancelAnimationFrame(state.rafId);
+  clearTimeout(state.idleTimer);
   state.stream?.getTracks().forEach((track) => track.stop());
   state.audioContext?.close();
   state.stream = null;
@@ -106,10 +128,11 @@ function monitorAudio() {
   const data = new Uint8Array(state.analyser.fftSize);
   state.analyser.getByteTimeDomainData(data);
   const level = rms(data);
-
   const now = performance.now();
+
   if (level > state.threshold) {
     state.lastVoiceAt = now;
+    resetIdleTimer();
     if (!state.recording && !state.busy) {
       startRecording();
     }
@@ -175,8 +198,8 @@ async function submitAudio() {
       setStatus("正在听");
       return;
     }
-    renderResult(result);
-    addHistory(result);
+    handleTranslation(result);
+    addRecord(result);
     setStatus("正在听");
   } catch (error) {
     console.error(error);
@@ -186,16 +209,146 @@ async function submitAudio() {
   }
 }
 
-function renderResult(result) {
-  state.captions = [{
+function handleTranslation(result) {
+  if (result.sourceLanguage === "zh") {
+    showDisplayText(result.translatedText);
+    stageLabel.textContent = "Showing your English";
+    return;
+  }
+
+  stageLabel.textContent = "Listening to English";
+  speakChinese(result.translatedText);
+}
+
+function showDisplayText(text) {
+  const value = String(text || "").trim();
+  if (!value) return;
+  displayText.textContent = value;
+  displayText.classList.remove("is-placeholder");
+  state.lastDisplayText = value;
+  localStorage.setItem("translatorLastDisplay", value);
+}
+
+function showPlaceholder(text) {
+  displayText.textContent = text;
+  displayText.classList.add("is-placeholder");
+}
+
+function restoreDisplay() {
+  if (state.lastDisplayText) {
+    showDisplayText(state.lastDisplayText);
+  }
+}
+
+function speakChinese(text) {
+  const value = String(text || "").trim();
+  if (!value || !("speechSynthesis" in window)) return;
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(value);
+  utterance.lang = "zh-CN";
+  utterance.rate = 1.02;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function addRecord(result) {
+  const record = {
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    time: new Date().toISOString(),
+    speaker: result.speaker || (result.sourceLanguage === "zh" ? "User" : "Target"),
+    sourceLanguage: result.sourceLanguage,
+    targetLanguage: result.targetLanguage,
     originalText: result.originalText,
     translatedText: result.translatedText
-  }];
-  renderCaptions(state.captions);
+  };
+  state.records.push(record);
+  localStorage.setItem("translatorSessionRecords", JSON.stringify(state.records));
+  renderHistory();
+}
+
+function renderHistory() {
+  historyList.innerHTML = "";
+  historyCount.textContent = `${state.records.length} 条`;
+
+  if (!state.records.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-history";
+    empty.textContent = "还没有会话记录";
+    historyList.appendChild(empty);
+    return;
+  }
+
+  [...state.records].reverse().forEach((item) => {
+    const node = historyItemTemplate.content.cloneNode(true);
+    node.querySelector("time").textContent = formatTime(item.time);
+    node.querySelector(".history-speaker").textContent = item.speaker === "User" ? "User / 中文" : "Target / English";
+    node.querySelector(".history-original").textContent = item.originalText;
+    node.querySelector(".history-translation").textContent = item.translatedText;
+    historyList.appendChild(node);
+  });
+}
+
+function endConversation(reason) {
+  if (state.ended) return;
+  state.ended = true;
+  state.sessionEndedAt = new Date().toISOString();
+  pauseListening();
+  setStatus(reason === "idle" ? "已因长时间无输入结束" : "对话已结束");
+  if (state.records.length) exportSessionDocument();
+}
+
+function exportSessionDocument() {
+  const endedAt = state.sessionEndedAt || new Date().toISOString();
+  const documentText = buildSessionDocument(endedAt);
+  const blob = new Blob([documentText], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `conversation-${formatFileDate(state.sessionStartedAt)}.md`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildSessionDocument(endedAt) {
+  const start = new Date(state.sessionStartedAt);
+  const end = new Date(endedAt);
+  const lines = [
+    "# Face-to-Face Translation Session",
+    "",
+    `- Session ID: ${state.sessionId}`,
+    `- Date: ${start.toLocaleDateString("zh-CN")}`,
+    `- Time Range: ${start.toLocaleTimeString("zh-CN", { hour12: false })} - ${end.toLocaleTimeString("zh-CN", { hour12: false })}`,
+    "",
+    "## Dialogue",
+    ""
+  ];
+
+  state.records.forEach((item, index) => {
+    const speaker = item.speaker === "User" ? "User (中文)" : "Target (English)";
+    lines.push(`### ${index + 1}. ${formatTime(item.time)} ${speaker}`);
+    lines.push(`- Original: ${item.originalText}`);
+    lines.push(`- Translation: ${item.translatedText}`);
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+function resetIdleTimer() {
+  clearTimeout(state.idleTimer);
+  state.idleTimer = window.setTimeout(() => {
+    if (state.listening && !state.recording && !state.busy) {
+      endConversation("idle");
+    }
+  }, idleEndMs);
 }
 
 function setListeningUi(isListening) {
   startButton.classList.toggle("listening", isListening);
+  listeningIndicator.classList.toggle("active", isListening);
   startButton.setAttribute("aria-label", isListening ? "暂停翻译" : "开始翻译");
 }
 
@@ -203,69 +356,17 @@ function setStatus(text) {
   statusText.textContent = text;
 }
 
-function addHistory(result) {
-  state.history.unshift({
-    time: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-    originalText: result.originalText,
-    translatedText: result.translatedText
-  });
-  state.history = state.history.slice(0, 20);
-  localStorage.setItem("translatorHistory", JSON.stringify(state.history));
-  renderHistory();
-}
-
-function renderHistory() {
-  historyList.innerHTML = "";
-  historyCount.textContent = `${state.history.length} / 20`;
-  state.history.forEach((item) => {
-    const node = historyItemTemplate.content.cloneNode(true);
-    node.querySelector("time").textContent = item.time;
-    node.querySelector(".history-original").textContent = item.originalText;
-    node.querySelector(".history-translation").textContent = item.translatedText;
-    historyList.appendChild(node);
-  });
-}
-
-function restoreCaptions() {
-  state.captions = state.history
-    .slice(0, 1)
-    .reverse()
-    .map((item) => ({
-      originalText: item.originalText,
-      translatedText: item.translatedText
-    }));
-  if (state.captions.length) renderCaptions(state.captions);
-}
-
-function renderCaptions(items) {
-  selfCaptions.innerHTML = "";
-  peerCaptions.innerHTML = "";
-  items.forEach((item, index) => {
-    const active = index === items.length - 1;
-    selfCaptions.appendChild(createCaption(item.originalText, item.translatedText, active));
-    peerCaptions.appendChild(createCaption(item.originalText, item.translatedText, active));
-  });
-}
-
-function createCaption(source, translation, active) {
-  const article = document.createElement("article");
-  article.className = `caption${active ? " active" : ""}`;
-
-  const sourceNode = document.createElement("p");
-  sourceNode.className = "caption-source";
-  sourceNode.textContent = source;
-
-  const translationNode = document.createElement("p");
-  translationNode.className = "caption-translation";
-  translationNode.textContent = translation;
-
-  article.append(sourceNode, translationNode);
-  return article;
-}
-
 function closeHistory() {
   historySheet.classList.remove("open");
   historySheet.setAttribute("aria-hidden", "true");
+}
+
+function formatTime(value) {
+  return new Date(value).toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function formatFileDate(value) {
+  return new Date(value).toISOString().replace(/[:.]/g, "-").slice(0, 19);
 }
 
 function rms(data) {
