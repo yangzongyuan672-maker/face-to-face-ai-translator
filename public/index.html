@@ -3,52 +3,45 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#090909">
+    <meta name="theme-color" content="#070707">
     <title>Face-to-Face AI Translator</title>
-    <meta name="description" content="手机浏览器使用的中英面对面双向实时翻译器。">
+    <meta name="description" content="非对称面对面中英实时翻译器。">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="translator" aria-label="面对面翻译器">
-      <section class="pane pane-peer" aria-label="对方查看">
-        <div class="content rotated">
-          <div class="caption-stack" id="peerCaptions">
-            <article class="caption active">
-              <p class="caption-source"></p>
-              <p class="caption-translation">Listening...</p>
-            </article>
-          </div>
+    <main class="translator" aria-label="非对称面对面翻译器">
+      <section class="display-stage" aria-label="给对方阅读的英文屏幕">
+        <div class="listening-indicator" id="listeningIndicator" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
+        <p class="stage-label" id="stageLabel">English display</p>
+        <h1 class="display-text is-placeholder" id="displayText">Ready</h1>
       </section>
 
       <section class="control-strip" aria-label="控制区">
-        <button class="history-button" id="historyButton" type="button" aria-label="历史记录">历史</button>
+        <button class="secondary-button" id="historyButton" type="button">记录</button>
         <div class="control-center">
           <button class="listen-button" id="startButton" type="button" aria-label="开始翻译">
-            <span class="dot"></span>
-            <span class="dot"></span>
+            <span class="mic-bar"></span>
+            <span class="mic-bar"></span>
+            <span class="mic-bar"></span>
           </button>
           <p id="statusText">点击开始</p>
         </div>
-        <span aria-hidden="true"></span>
-      </section>
-
-      <section class="pane pane-self" aria-label="自己查看">
-        <div class="content">
-          <div class="caption-stack" id="selfCaptions">
-            <article class="caption active">
-              <p class="caption-source"></p>
-              <p class="caption-translation">请说话...</p>
-            </article>
-          </div>
-        </div>
+        <button class="secondary-button danger" id="endButton" type="button">结束</button>
       </section>
     </main>
 
     <aside class="history-sheet" id="historySheet" aria-hidden="true">
       <div class="history-panel">
         <header>
-          <p>历史记录 <span id="historyCount">0 / 20</span></p>
+          <div>
+            <p>会话记录</p>
+            <span id="historyCount">0 条</span>
+          </div>
+          <button id="exportButton" type="button">导出</button>
           <button id="clearButton" type="button">清空</button>
           <button id="closeHistoryButton" type="button" aria-label="关闭历史记录">×</button>
         </header>
@@ -58,7 +51,10 @@
 
     <template id="historyItemTemplate">
       <article class="history-item">
-        <time></time>
+        <div class="history-meta">
+          <time></time>
+          <span class="history-speaker"></span>
+        </div>
         <p class="history-original"></p>
         <p class="history-translation"></p>
       </article>
