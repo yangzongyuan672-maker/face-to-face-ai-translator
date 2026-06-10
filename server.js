@@ -21,7 +21,11 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY) });
+  res.json({
+    ok: true,
+    hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+    mode: "asymmetric-openai-vad"
+  });
 });
 
 app.post("/api/translate", upload.single("audio"), async (req, res) => {
@@ -53,6 +57,7 @@ app.post("/api/translate", upload.single("audio"), async (req, res) => {
       res.json({
         ok: true,
         empty: true,
+        speaker: "unknown",
         sourceLanguage: "unknown",
         targetLanguage: "unknown",
         originalText: "",
@@ -87,9 +92,11 @@ async function translateText(text) {
         content: [
           "You are a face-to-face bilingual interpreter for Chinese and English.",
           "Detect whether the user text is mainly Chinese or English.",
-          "If Chinese, translate naturally into English. If English, translate naturally into Simplified Chinese.",
+          "If Chinese, the speaker is User and you must translate naturally into English for a distant reader.",
+          "If English, the speaker is Target and you must translate naturally into Simplified Chinese for private audio playback.",
           "Preserve names, numbers, dates, and business meaning. Do not add explanations.",
-          "Return only JSON with keys: sourceLanguage, targetLanguage, translatedText.",
+          "Return only JSON with keys: speaker, sourceLanguage, targetLanguage, translatedText.",
+          "Use speaker values User or Target.",
           "Use sourceLanguage values zh or en. Use targetLanguage values en or zh."
         ].join(" ")
       },
@@ -102,6 +109,7 @@ async function translateText(text) {
   const sourceLanguage = parsed.sourceLanguage === "zh" ? "zh" : "en";
   const targetLanguage = sourceLanguage === "zh" ? "en" : "zh";
   return {
+    speaker: sourceLanguage === "zh" ? "User" : "Target",
     sourceLanguage,
     targetLanguage,
     translatedText: String(parsed.translatedText || "").trim()
