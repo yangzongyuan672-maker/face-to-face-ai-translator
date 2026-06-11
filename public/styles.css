@@ -90,14 +90,15 @@ button {
 
 .confirm-line {
   min-height: 1.35em;
+  max-height: min(28svh, 9.2em);
   margin: 0;
   color: var(--muted);
   font-size: clamp(0.92rem, 2vw, 1.6rem);
   line-height: 1.28;
   font-weight: 680;
-  overflow: visible;
+  overflow: auto;
   overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: pre-wrap;
 }
 
 .listening-indicator {
