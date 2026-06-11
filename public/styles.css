@@ -37,7 +37,7 @@ button {
 .translator {
   min-height: 100svh;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 84px;
+  grid-template-rows: minmax(0, 1fr);
   background: var(--bg);
 }
 
@@ -47,7 +47,7 @@ button {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
-  padding: max(16px, env(safe-area-inset-top)) clamp(16px, 4vw, 56px) 14px;
+  padding: max(16px, env(safe-area-inset-top)) clamp(16px, 4vw, 56px) calc(104px + env(safe-area-inset-bottom));
 }
 
 .caption-board {
@@ -132,6 +132,11 @@ button {
 }
 
 .control-strip {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   height: 84px;
   display: grid;
   grid-template-columns: 1fr 104px 1fr;
@@ -351,6 +356,7 @@ button {
 
   .control-strip {
     position: fixed;
+    left: auto;
     right: max(12px, env(safe-area-inset-right));
     bottom: max(10px, env(safe-area-inset-bottom));
     z-index: 10;
@@ -399,7 +405,7 @@ button {
 
 @media (max-width: 520px) {
   .translator {
-    grid-template-rows: minmax(0, 1fr) 82px;
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .display-stage {
