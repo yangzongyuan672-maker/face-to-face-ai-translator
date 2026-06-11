@@ -184,10 +184,10 @@ function createGeminiSession(client, options) {
     const setupMessage = {
       setup: {
         model: `models/${geminiLiveModel}`,
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
         generationConfig: {
           responseModalities: ["AUDIO"],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
           translationConfig: {
             targetLanguageCode: options.targetLanguageCode,
             echoTargetLanguage: false
