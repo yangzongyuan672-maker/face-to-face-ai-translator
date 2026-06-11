@@ -132,6 +132,11 @@ function openLiveSocket() {
 
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
+      if (message.type === "error") {
+        window.clearTimeout(timeout);
+        reject(new Error(message.error || "Gemini Live 连接失败"));
+        return;
+      }
       if (message.type === "live-ready") {
         readyChannels.add(message.channel);
         if (readyChannels.has("en") && readyChannels.has("zh")) {
