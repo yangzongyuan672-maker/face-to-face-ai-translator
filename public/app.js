@@ -25,6 +25,8 @@ const state = {
   listening: false,
   ended: false,
   ws: null,
+  reconnecting: false,
+  manualDisconnect: false,
   stream: null,
   audioContext: null,
   source: null,
@@ -42,6 +44,8 @@ const state = {
   currentChinese: "",
   captions: JSON.parse(localStorage.getItem("nancyCaptions") || "[]"),
   chineseCaptions: JSON.parse(localStorage.getItem("nancyChineseCaptions") || "[]"),
+  captionAutoScroll: true,
+  chineseAutoScroll: true,
   records: JSON.parse(localStorage.getItem("translatorSessionRecords") || "[]")
 };
 
@@ -73,21 +77,27 @@ clearButton.addEventListener("click", () => {
   renderHistory();
 });
 
-exportButton.addEventListener("click", () => exportSessionDocument());
+exportButton.addEventListener("click", () => copySessionText());
 
 historyButton.addEventListener("click", () => {
-  historySheet.classList.add("open");
-  historySheet.setAttribute("aria-hidden", "false");
+  openHistory();
 });
 
 closeHistoryButton.addEventListener("click", closeHistory);
 historySheet.addEventListener("click", (event) => {
   if (event.target === historySheet) closeHistory();
 });
+captionBoard.addEventListener("scroll", () => {
+  state.captionAutoScroll = isNearBottom(captionBoard);
+});
+confirmLine.addEventListener("scroll", () => {
+  state.chineseAutoScroll = isNearBottom(confirmLine);
+});
 
 async function startListening() {
   try {
     state.ended = false;
+    state.manualDisconnect = false;
     setListeningUi(true);
     setStatus("连接 Gemini Live");
     await openLiveSocket();
@@ -129,7 +139,7 @@ function openLiveSocket() {
 
     const timeout = window.setTimeout(() => {
       reject(new Error("Gemini Live 连接超时"));
-    }, 12000);
+    }, 18000);
 
     let readyChannels = new Set();
     socket.addEventListener("open", () => {
@@ -160,12 +170,31 @@ function openLiveSocket() {
     });
 
     socket.addEventListener("close", () => {
-      if (state.listening) {
-        setStatus("实时连接已断开");
-        pauseListening();
+      if (state.listening && !state.manualDisconnect) {
+        reconnectLiveSocket();
       }
     });
   });
+}
+
+async function reconnectLiveSocket() {
+  if (state.reconnecting || state.ended || !state.stream) return;
+  state.reconnecting = true;
+  setStatus("Gemini 断开，正在重连");
+  for (let attempt = 1; attempt <= 4 && state.listening && !state.manualDisconnect; attempt += 1) {
+    try {
+      await delay(600 * attempt);
+      await openLiveSocket();
+      setStatus("实时翻译中");
+      state.reconnecting = false;
+      return;
+    } catch (error) {
+      console.warn(error);
+      setStatus(`重连中 ${attempt}/4`);
+    }
+  }
+  state.reconnecting = false;
+  if (state.listening) setStatus("Gemini 连接失败，点开始重试");
 }
 
 function handleAudioProcess(event) {
@@ -283,7 +312,7 @@ function addChineseCaption(text) {
   localStorage.setItem("nancyChineseCaptions", JSON.stringify(state.chineseCaptions));
 }
 
-function renderCaptions() {
+function renderCaptions(options = {}) {
   captionBoard.innerHTML = "";
   if (!state.captions.length && !state.currentEnglish) {
     captionBoard.appendChild(emptyCaption);
@@ -306,18 +335,23 @@ function renderCaptions() {
     captionBoard.appendChild(line);
   }
 
-  captionBoard.scrollTop = captionBoard.scrollHeight;
+  if (options.forceScroll || state.captionAutoScroll) {
+    captionBoard.scrollTop = captionBoard.scrollHeight;
+  }
 }
 
-function renderChineseCaptions() {
+function renderChineseCaptions(options = {}) {
   const lines = state.chineseCaptions.map((caption) => formatCaptionLines(caption.text));
   if (state.currentChinese) lines.push(formatCaptionLines(state.currentChinese));
   confirmLine.textContent = lines.filter(Boolean).join("\n");
-  confirmLine.scrollTop = confirmLine.scrollHeight;
+  if (options.forceScroll || state.chineseAutoScroll) {
+    confirmLine.scrollTop = confirmLine.scrollHeight;
+  }
 }
 
 function pauseListening() {
   state.listening = false;
+  state.manualDisconnect = true;
   clearTimeout(state.idleTimer);
   if (state.ws?.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify({ type: "stop" }));
@@ -371,6 +405,12 @@ function renderHistory() {
 
   [...state.records].reverse().forEach((item) => {
     const node = historyItemTemplate.content.cloneNode(true);
+    const article = node.querySelector(".history-item");
+    article.tabIndex = 0;
+    article.addEventListener("click", () => showRecordOnScreen(item));
+    article.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") showRecordOnScreen(item);
+    });
     node.querySelector("time").textContent = formatTime(item.time);
     node.querySelector(".history-speaker").textContent = item.speaker === "User" ? "中文 -> 英文" : "English -> 中文";
     node.querySelector(".history-original").textContent = item.originalText;
@@ -385,77 +425,39 @@ function endConversation(reason) {
   state.sessionEndedAt = new Date().toISOString();
   pauseListening();
   setStatus(reason === "idle" ? "已因长时间无输入结束" : "对话已结束");
-  if (state.records.length) exportSessionDocument();
+  if (state.records.length) openHistory();
 }
 
-function exportSessionDocument() {
-  const endedAt = state.sessionEndedAt || new Date().toISOString();
-  const documentText = buildSessionHtml(endedAt);
-  const blob = new Blob([documentText], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `nancy-conversation-${formatFileDate(state.sessionStartedAt)}.html`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+async function copySessionText() {
+  const text = buildSessionText();
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus("记录已复制");
+  } catch {
+    setStatus("复制失败，记录仍在页面里");
+  }
 }
 
-function buildSessionHtml(endedAt) {
-  const start = new Date(state.sessionStartedAt);
-  const end = new Date(endedAt);
-  const rows = state.records.map((item, index) => {
+function buildSessionText() {
+  const lines = ["Nancy Translation Session", ""];
+  state.records.forEach((item, index) => {
     const speaker = item.speaker === "User" ? "中文 -> 英文" : "English -> 中文";
-    return `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${escapeHtml(formatTime(item.time))}</td>
-        <td>${escapeHtml(speaker)}</td>
-        <td>${escapeHtml(item.originalText || "")}</td>
-        <td>${escapeHtml(item.translatedText || "")}</td>
-      </tr>`;
-  }).join("");
+    lines.push(`${index + 1}. ${formatTime(item.time)} ${speaker}`);
+    if (item.originalText) lines.push(`原文：${item.originalText}`);
+    lines.push(`翻译：${item.translatedText || ""}`, "");
+  });
+  return lines.join("\n");
+}
 
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nancy Translation Session</title>
-  <style>
-    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 24px; color: #202124; }
-    h1 { font-size: 22px; margin: 0 0 12px; }
-    .meta { color: #5f6368; line-height: 1.6; margin-bottom: 18px; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-    th, td { border: 1px solid #dadce0; padding: 8px; vertical-align: top; word-break: break-word; }
-    th { background: #f1f3f4; text-align: left; }
-    td:nth-child(1) { width: 44px; }
-    td:nth-child(2) { width: 90px; }
-    td:nth-child(3) { width: 120px; }
-  </style>
-</head>
-<body>
-  <h1>Nancy Translation Session</h1>
-  <div class="meta">
-    <div>Session ID: ${escapeHtml(state.sessionId)}</div>
-    <div>Date: ${escapeHtml(start.toLocaleDateString("zh-CN"))}</div>
-    <div>Time: ${escapeHtml(start.toLocaleTimeString("zh-CN", { hour12: false }))} - ${escapeHtml(end.toLocaleTimeString("zh-CN", { hour12: false }))}</div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>时间</th>
-        <th>方向</th>
-        <th>原文</th>
-        <th>翻译</th>
-      </tr>
-    </thead>
-    <tbody>${rows || "<tr><td colspan=\"5\">没有记录</td></tr>"}</tbody>
-  </table>
-</body>
-</html>`;
+function showRecordOnScreen(item) {
+  if (item.targetLanguage === "en") {
+    addCaption(item.translatedText);
+    renderCaptions({ forceScroll: true });
+  } else {
+    addChineseCaption(item.translatedText);
+    renderChineseCaptions({ forceScroll: true });
+  }
+  closeHistory();
 }
 
 function downsampleTo16BitPcm(input, inputRate, outputRate) {
@@ -564,12 +566,12 @@ function isSameCaption(a, b) {
   return normalizeCaption(a).toLowerCase() === normalizeCaption(b).toLowerCase();
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function isNearBottom(element) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function resetIdleTimer() {
@@ -592,6 +594,11 @@ function setStatus(text) {
 function closeHistory() {
   historySheet.classList.remove("open");
   historySheet.setAttribute("aria-hidden", "true");
+}
+
+function openHistory() {
+  historySheet.classList.add("open");
+  historySheet.setAttribute("aria-hidden", "false");
 }
 
 function formatTime(value) {
