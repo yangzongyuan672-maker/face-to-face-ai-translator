@@ -55,8 +55,9 @@ button {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: clamp(8px, 1.3vh, 16px);
+  justify-content: flex-start;
+  gap: clamp(6px, 1vh, 12px);
+  padding-block: clamp(8px, 2vh, 22px);
   scroll-behavior: smooth;
 }
 
@@ -70,12 +71,12 @@ button {
 
 .caption-line {
   margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
   letter-spacing: 0;
-  font-size: clamp(1.38rem, 4.45vw, 4.6rem);
-  line-height: 1.02;
+  font-size: clamp(1.2rem, 3.7vw, 3.6rem);
+  line-height: 1.16;
   font-weight: 820;
 }
 
@@ -94,9 +95,9 @@ button {
   font-size: clamp(0.92rem, 2vw, 1.6rem);
   line-height: 1.28;
   font-weight: 680;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .listening-indicator {
@@ -339,7 +340,7 @@ button {
   }
 
   .caption-line {
-    font-size: clamp(1.1rem, 5.4vh, 2.35rem);
+    font-size: clamp(1rem, 4.9vh, 2.05rem);
   }
 
   .confirm-line {
@@ -405,7 +406,7 @@ button {
   }
 
   .caption-line {
-    font-size: clamp(1.22rem, 7.2vw, 2.9rem);
+    font-size: clamp(1.08rem, 6vw, 2.25rem);
   }
 
   .control-strip {
