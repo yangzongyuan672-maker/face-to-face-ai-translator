@@ -1,33 +1,39 @@
-# Face-to-Face AI Translator
+# Nancy
 
-手机浏览器使用的非对称面对面中英翻译器。
+Nancy 是手机浏览器使用的非对称面对面中英实时翻译器。
 
 ## 功能
 
-- 自动监听麦克风
-- VAD 停顿断句
-- OpenAI 语音识别
-- 中英文自动识别和双向翻译
-- 中文发言时仅在主屏显示英文大字
-- 英文发言时主屏保持不变，并通过浏览器中文语音播报译文
+- 使用 Gemini Live Translate WebSocket 流式翻译
+- 麦克风音频转为 16k PCM，并按约 100ms 分片持续发送
+- 中文发言时，主屏实时显示英文字幕
+- 英文发言时，通过 Gemini 输出的中文音频流实时播放
+- 英文字幕下方显示小号中文翻译，方便确认反馈是否正确
+- 已完成字幕显示绿色，正在生成/调整的字幕显示白色
 - 主屏边角显示轻量收音呼吸反馈
 - 记录完整会话，并可在结束对话时导出 Markdown 文档
 - 开始、暂停、结束、记录、清空
 
 ## 交互逻辑
 
-- User 说中文：识别后翻译成英文，替换主屏大字，方便对方阅读。
-- Target 说英文：识别后翻译成中文，使用浏览器 `speechSynthesis` 播放，不在主屏显示文本。
-- 主屏英文会一直保留，直到下一条中文发言翻译完成后替换。
+- User 说中文：实时翻译成英文字幕，方便对方阅读。
+- Target 说英文：实时翻译成中文音频播放，同时在底部用小字显示中文确认。
+- 主屏英文字幕按句保留，最新生成中的一句为白色，完成后变绿色。
 - 点击“结束”会停止监听，并把当前会话导出为结构化 Markdown 文档。
 
-当前版本仍使用 OpenAI HTTP 识别/翻译链路。PRD 中的 Google Gemini Live API WebSocket 真同传需要新增 `GOOGLE_API_KEY`、WebSocket 代理和 PCM 音频流处理后再切换。
+当前实时链路使用 Google Gemini Live Translate：
+
+```txt
+GEMINI_LIVE_MODEL=gemini-3.5-live-translate-preview
+```
+
+后端保留 OpenAI HTTP 识别/翻译接口作为旧兜底代码，但主界面会优先连接 Gemini Live WebSocket。
 
 ## 本地运行
 
 ```bash
 npm install
-OPENAI_API_KEY=你的_key npm start
+GOOGLE_API_KEY=你的_google_ai_studio_key npm start
 ```
 
 打开 `http://localhost:3000`。
@@ -37,8 +43,12 @@ OPENAI_API_KEY=你的_key npm start
 在 Railway 项目的 Variables 里设置环境变量：
 
 ```txt
+GOOGLE_API_KEY=你的 Google AI Studio API Key
+GEMINI_LIVE_MODEL=gemini-3.5-live-translate-preview
 OPENAI_API_KEY=你的 OpenAI API Key
 ```
+
+`OPENAI_API_KEY` 只用于旧 HTTP 兜底接口；实时同传必须设置 `GOOGLE_API_KEY` 或 `GEMINI_API_KEY`。
 
 Railway 会读取 `railway.json`，启动命令为：
 
@@ -46,7 +56,7 @@ Railway 会读取 `railway.json`，启动命令为：
 npm start
 ```
 
-可选覆盖模型：
+可选覆盖旧兜底模型：
 
 ```txt
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
