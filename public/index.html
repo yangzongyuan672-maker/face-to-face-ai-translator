@@ -4,31 +4,34 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#070707">
-    <title>Face-to-Face AI Translator</title>
-    <meta name="description" content="非对称面对面中英实时翻译器。">
+    <title>Nancy</title>
+    <meta name="description" content="Nancy 非对称实时中英翻译器。">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="translator" aria-label="非对称面对面翻译器">
-      <section class="display-stage" aria-label="给对方阅读的英文屏幕">
+    <main class="translator" aria-label="Nancy 实时翻译器">
+      <section class="display-stage" aria-label="给对方阅读的字幕屏幕">
         <div class="listening-indicator" id="listeningIndicator" aria-hidden="true">
           <span></span>
           <span></span>
           <span></span>
         </div>
-        <p class="stage-label" id="stageLabel">English display</p>
-        <h1 class="display-text is-placeholder" id="displayText">Ready</h1>
+        <div class="caption-board" id="captionBoard">
+          <p class="empty-caption" id="emptyCaption">Ready</p>
+        </div>
+        <p class="confirm-line" id="confirmLine"></p>
       </section>
 
       <section class="control-strip" aria-label="控制区">
         <button class="secondary-button" id="historyButton" type="button">记录</button>
         <div class="control-center">
+          <p id="statusText">点击开始</p>
           <button class="listen-button" id="startButton" type="button" aria-label="开始翻译">
             <span class="mic-bar"></span>
             <span class="mic-bar"></span>
             <span class="mic-bar"></span>
           </button>
-          <p id="statusText">点击开始</p>
         </div>
         <button class="secondary-button danger" id="endButton" type="button">结束</button>
       </section>
