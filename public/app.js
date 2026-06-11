@@ -31,6 +31,8 @@ const state = {
   processor: null,
   playbackContext: null,
   playbackCursor: 0,
+  playbackSourceLanguage: null,
+  queuedAudio: [],
   pendingSamples: [],
   idleTimer: null,
   sessionId: crypto.randomUUID?.() || String(Date.now()),
@@ -212,6 +214,8 @@ function handleLiveMessage(message) {
     }
     state.currentEnglish = "";
     state.currentChinese = "";
+    state.playbackSourceLanguage = null;
+    state.queuedAudio = [];
     renderChineseCaptions();
     renderCaptions();
     return;
@@ -230,6 +234,8 @@ function handleLiveMessage(message) {
     if (text) addChineseCaption(text);
     state.currentChinese = "";
     state.currentEnglish = "";
+    state.playbackSourceLanguage = null;
+    state.queuedAudio = [];
     addRecord({
       speaker: "Target",
       originalText: "",
@@ -245,9 +251,13 @@ function handleLiveMessage(message) {
   if (message.type === "source-partial") {
     const text = normalizeCaption(message.text);
     if (looksEnglish(text)) {
+      state.playbackSourceLanguage = "en";
       state.currentEnglish = text;
+      flushQueuedAudio();
       renderCaptions();
     } else if (text) {
+      state.playbackSourceLanguage = "zh";
+      state.queuedAudio = [];
       state.currentChinese = text;
       renderChineseCaptions();
     }
@@ -255,7 +265,7 @@ function handleLiveMessage(message) {
   }
 
   if (message.type === "audio" && message.data) {
-    playPcm24(message.data, message.sampleRate || 24000);
+    playTranslatedAudio(message.data, message.sampleRate || 24000);
   }
 }
 
@@ -328,6 +338,8 @@ function cleanupAudio() {
   state.source = null;
   state.processor = null;
   state.pendingSamples = [];
+  state.queuedAudio = [];
+  state.playbackSourceLanguage = null;
 }
 
 function addRecord(result) {
@@ -378,41 +390,72 @@ function endConversation(reason) {
 
 function exportSessionDocument() {
   const endedAt = state.sessionEndedAt || new Date().toISOString();
-  const documentText = buildSessionDocument(endedAt);
-  const blob = new Blob([documentText], { type: "text/markdown;charset=utf-8" });
+  const documentText = buildSessionHtml(endedAt);
+  const blob = new Blob([documentText], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `nancy-conversation-${formatFileDate(state.sessionStartedAt)}.md`;
+  link.download = `nancy-conversation-${formatFileDate(state.sessionStartedAt)}.html`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
 }
 
-function buildSessionDocument(endedAt) {
+function buildSessionHtml(endedAt) {
   const start = new Date(state.sessionStartedAt);
   const end = new Date(endedAt);
-  const lines = [
-    "# Nancy Translation Session",
-    "",
-    `- Session ID: ${state.sessionId}`,
-    `- Date: ${start.toLocaleDateString("zh-CN")}`,
-    `- Time Range: ${start.toLocaleTimeString("zh-CN", { hour12: false })} - ${end.toLocaleTimeString("zh-CN", { hour12: false })}`,
-    "",
-    "## Dialogue",
-    ""
-  ];
-
-  state.records.forEach((item, index) => {
+  const rows = state.records.map((item, index) => {
     const speaker = item.speaker === "User" ? "中文 -> 英文" : "English -> 中文";
-    lines.push(`### ${index + 1}. ${formatTime(item.time)} ${speaker}`);
-    if (item.originalText) lines.push(`- Original: ${item.originalText}`);
-    lines.push(`- Translation: ${item.translatedText}`);
-    lines.push("");
-  });
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(formatTime(item.time))}</td>
+        <td>${escapeHtml(speaker)}</td>
+        <td>${escapeHtml(item.originalText || "")}</td>
+        <td>${escapeHtml(item.translatedText || "")}</td>
+      </tr>`;
+  }).join("");
 
-  return lines.join("\n");
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nancy Translation Session</title>
+  <style>
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 24px; color: #202124; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    .meta { color: #5f6368; line-height: 1.6; margin-bottom: 18px; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th, td { border: 1px solid #dadce0; padding: 8px; vertical-align: top; word-break: break-word; }
+    th { background: #f1f3f4; text-align: left; }
+    td:nth-child(1) { width: 44px; }
+    td:nth-child(2) { width: 90px; }
+    td:nth-child(3) { width: 120px; }
+  </style>
+</head>
+<body>
+  <h1>Nancy Translation Session</h1>
+  <div class="meta">
+    <div>Session ID: ${escapeHtml(state.sessionId)}</div>
+    <div>Date: ${escapeHtml(start.toLocaleDateString("zh-CN"))}</div>
+    <div>Time: ${escapeHtml(start.toLocaleTimeString("zh-CN", { hour12: false }))} - ${escapeHtml(end.toLocaleTimeString("zh-CN", { hour12: false }))}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>时间</th>
+        <th>方向</th>
+        <th>原文</th>
+        <th>翻译</th>
+      </tr>
+    </thead>
+    <tbody>${rows || "<tr><td colspan=\"5\">没有记录</td></tr>"}</tbody>
+  </table>
+</body>
+</html>`;
 }
 
 function downsampleTo16BitPcm(input, inputRate, outputRate) {
@@ -474,6 +517,22 @@ function playPcm24(base64, sampleRate) {
   state.playbackCursor = startAt + buffer.duration;
 }
 
+function playTranslatedAudio(data, sampleRate) {
+  if (state.playbackSourceLanguage === "zh") return;
+  if (state.playbackSourceLanguage !== "en") {
+    state.queuedAudio.push({ data, sampleRate });
+    state.queuedAudio = state.queuedAudio.slice(-20);
+    return;
+  }
+  playPcm24(data, sampleRate);
+}
+
+function flushQueuedAudio() {
+  if (state.playbackSourceLanguage !== "en") return;
+  const queued = state.queuedAudio.splice(0);
+  for (const item of queued) playPcm24(item.data, item.sampleRate);
+}
+
 function base64ToBytes(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -503,6 +562,14 @@ function looksEnglish(text) {
 
 function isSameCaption(a, b) {
   return normalizeCaption(a).toLowerCase() === normalizeCaption(b).toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function resetIdleTimer() {
