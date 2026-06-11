@@ -17,7 +17,7 @@ const historyItemTemplate = document.querySelector("#historyItemTemplate");
 const targetRate = 16000;
 const chunkMs = 100;
 const chunkSamples = Math.floor(targetRate * chunkMs / 1000);
-const maxCaptions = 9;
+const maxCaptions = 18;
 const idleEndMs = 20 * 60 * 1000;
 
 const state = {
@@ -260,14 +260,14 @@ function renderCaptions() {
   for (const caption of state.captions) {
     const line = document.createElement("p");
     line.className = "caption-line complete";
-    line.textContent = caption.text;
+    line.textContent = formatCaptionLines(caption.text);
     captionBoard.appendChild(line);
   }
 
   if (state.currentEnglish) {
     const line = document.createElement("p");
     line.className = "caption-line partial";
-    line.textContent = state.currentEnglish;
+    line.textContent = formatCaptionLines(state.currentEnglish);
     captionBoard.appendChild(line);
   }
 
@@ -451,6 +451,14 @@ function base64ToBytes(base64) {
 
 function normalizeCaption(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function formatCaptionLines(text) {
+  const normalized = normalizeCaption(text);
+  if (!normalized) return "";
+  return normalized
+    .replace(/([.!?。！？])\s+/g, "$1\n")
+    .replace(/([.!?。！？])(?=[A-Z\u4e00-\u9fff])/g, "$1\n");
 }
 
 function resetIdleTimer() {
