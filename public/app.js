@@ -18,6 +18,7 @@ const targetRate = 16000;
 const chunkMs = 100;
 const chunkSamples = Math.floor(targetRate * chunkMs / 1000);
 const maxCaptions = 18;
+const maxChineseCaptions = 6;
 const idleEndMs = 20 * 60 * 1000;
 
 const state = {
@@ -38,6 +39,7 @@ const state = {
   currentEnglish: "",
   currentChinese: "",
   captions: JSON.parse(localStorage.getItem("nancyCaptions") || "[]"),
+  chineseCaptions: JSON.parse(localStorage.getItem("nancyChineseCaptions") || "[]"),
   records: JSON.parse(localStorage.getItem("translatorSessionRecords") || "[]")
 };
 
@@ -57,12 +59,14 @@ endButton.addEventListener("click", () => endConversation("manual"));
 clearButton.addEventListener("click", () => {
   state.records = [];
   state.captions = [];
+  state.chineseCaptions = [];
   state.currentEnglish = "";
   state.currentChinese = "";
   state.sessionStartedAt = new Date().toISOString();
   state.sessionEndedAt = null;
   localStorage.removeItem("translatorSessionRecords");
   localStorage.removeItem("nancyCaptions");
+  localStorage.removeItem("nancyChineseCaptions");
   renderCaptions();
   renderHistory();
 });
@@ -208,32 +212,45 @@ function handleLiveMessage(message) {
     }
     state.currentEnglish = "";
     state.currentChinese = "";
+    renderChineseCaptions();
     renderCaptions();
     return;
   }
 
   if (message.type === "chinese-partial") {
     state.currentChinese = normalizeCaption(message.text);
-    confirmLine.textContent = state.currentChinese;
+    renderChineseCaptions();
     renderCaptions();
     return;
   }
 
   if (message.type === "chinese-final") {
-    state.currentChinese = normalizeCaption(message.text);
-    confirmLine.textContent = state.currentChinese;
+    const text = normalizeCaption(message.text);
+    if (state.currentEnglish) addCaption(state.currentEnglish);
+    if (text) addChineseCaption(text);
+    state.currentChinese = "";
+    state.currentEnglish = "";
     addRecord({
       speaker: "Target",
       originalText: "",
-      translatedText: state.currentChinese,
+      translatedText: text,
       sourceLanguage: "en",
       targetLanguage: "zh"
     });
+    renderChineseCaptions();
+    renderCaptions();
     return;
   }
 
-  if (message.type === "source-partial" && !state.currentChinese) {
-    confirmLine.textContent = normalizeCaption(message.text);
+  if (message.type === "source-partial") {
+    const text = normalizeCaption(message.text);
+    if (looksEnglish(text)) {
+      state.currentEnglish = text;
+      renderCaptions();
+    } else if (text) {
+      state.currentChinese = text;
+      renderChineseCaptions();
+    }
     return;
   }
 
@@ -243,9 +260,17 @@ function handleLiveMessage(message) {
 }
 
 function addCaption(text) {
+  if (isSameCaption(state.captions.at(-1)?.text, text)) return;
   state.captions.push({ id: crypto.randomUUID?.() || String(Date.now()), text });
   state.captions = state.captions.slice(-maxCaptions);
   localStorage.setItem("nancyCaptions", JSON.stringify(state.captions));
+}
+
+function addChineseCaption(text) {
+  if (isSameCaption(state.chineseCaptions.at(-1)?.text, text)) return;
+  state.chineseCaptions.push({ id: crypto.randomUUID?.() || String(Date.now()), text });
+  state.chineseCaptions = state.chineseCaptions.slice(-maxChineseCaptions);
+  localStorage.setItem("nancyChineseCaptions", JSON.stringify(state.chineseCaptions));
 }
 
 function renderCaptions() {
@@ -272,6 +297,13 @@ function renderCaptions() {
   }
 
   captionBoard.scrollTop = captionBoard.scrollHeight;
+}
+
+function renderChineseCaptions() {
+  const lines = state.chineseCaptions.map((caption) => formatCaptionLines(caption.text));
+  if (state.currentChinese) lines.push(formatCaptionLines(state.currentChinese));
+  confirmLine.textContent = lines.filter(Boolean).join("\n");
+  confirmLine.scrollTop = confirmLine.scrollHeight;
 }
 
 function pauseListening() {
@@ -459,6 +491,18 @@ function formatCaptionLines(text) {
   return normalized
     .replace(/([.!?。！？])\s+/g, "$1\n")
     .replace(/([.!?。！？])(?=[A-Z\u4e00-\u9fff])/g, "$1\n");
+}
+
+function looksEnglish(text) {
+  const normalized = normalizeCaption(text);
+  if (!normalized) return false;
+  const latin = normalized.match(/[A-Za-z]/g)?.length || 0;
+  const cjk = normalized.match(/[\u3400-\u9fff]/g)?.length || 0;
+  return latin > 0 && latin >= cjk;
+}
+
+function isSameCaption(a, b) {
+  return normalizeCaption(a).toLowerCase() === normalizeCaption(b).toLowerCase();
 }
 
 function resetIdleTimer() {
